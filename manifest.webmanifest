@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "明日放映 · Event Queen Street 中文排片",
+  "short_name": "明日放映",
+  "description": "Event Cinemas Queen Street（奥克兰皇后街）明天放映的电影：中文片名、剧情简介、豆瓣评分、场次时间。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0706",
+  "theme_color": "#0b0706",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

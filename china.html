@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 网页版：猫眼图片有防盗链，不带来源网址才能显示；也不让搜索引擎收录 -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0706">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="上海影院">
+<title>明日放映 · 上海影院排片（五角场万达 · 博纳中原）</title>
+<meta name="description" content="上海影院明天放映的电影（五角场万达影城、中原城市广场博纳影城，点一下切换）：剧情简介、豆瓣和猫眼评分、场次时间、预告片。">
+<link rel="icon" href="icon_cn.ico">
+<link rel="apple-touch-icon" href="assets/touch-icon-cn.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Limelight&family=Noto+Serif+SC:wght@500;700;900&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/cinema.css">
+</head>
+<body>
+<header class="stage">
+  <div class="valance" aria-hidden="true"></div>
+  <div class="curtain l" aria-hidden="true"></div>
+  <div class="curtain r" aria-hidden="true"></div>
+  <div class="marquee">
+    <div class="bulbs" aria-hidden="true"></div>
+    <p class="kicker zh" id="kicker">&nbsp;</p>
+    <h1 class="headline" id="headline">明日放映</h1>
+    <p class="dateline" id="dateline">&nbsp;</p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <nav class="venues" id="venues" aria-label="选影院" hidden></nav>
+  <div class="extras">
+    <a class="switch" href="index.html" title="回到奥克兰 Event Queen Street 的排片">
+      <span class="s1">CHANGE CINEMA · 换影院</span><span class="s2">奥克兰 · Queen Street ›</span>
+    </a>
+    <div class="admit" id="admit">
+      <div class="a1">ADMIT ONE</div>
+      <div class="a2" id="admitNo">No. 000001</div>
+      <div class="a3" id="admitTxt">第 1 次查看排片</div>
+    </div>
+  </div>
+</header>
+
+<nav class="days" id="days" aria-label="选择日期"></nav>
+<div class="wrap"><div class="banner" id="banner" role="status" hidden></div></div>
+<div class="film" aria-hidden="true"></div>
+
+<div class="wrap">
+  <div class="toolbar">
+    <div class="seg" id="views" role="group" aria-label="显示方式"></div>
+    <div class="chips" id="periods" role="group" aria-label="时段"></div>
+    <label class="sorter" id="sorter">排序 <select id="sort"></select></label>
+  </div>
+  <div class="cats" id="cats" aria-label="按地区、类型分类"></div>
+  <main id="show" class="grid"></main>
+</div>
+
+<footer id="footer"></footer>
+<dialog class="detail" id="detail" aria-label="影片详情"></dialog>
+<noscript><p class="empty">这个页面需要开启 JavaScript 才能显示排片。</p></noscript>
+
+<script src="assets/cinema.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = CinemaApp.esc;
+  var cinema = function (r) { return (r && r.cinema) || {}; };
+  // 几家影院在同一个数据文件里（update_cn.py 写的 version 2：cinemas 是每家的场次，movies 是共用的电影资料）
+  function cinemasOf(all) {
+    if (!all) return [];
+    if (Array.isArray(all.cinemas)) return all.cinemas.filter(function (c) { return c && c.id != null; });
+    return all.cinema ? [all.cinema] : [];          // 老格式（version 1）：只有一家
+  }
+
+  CinemaApp.start({
+    key: 'cncin',
+    tz: 'Asia/Shanghai',                   // 「明天」按北京时间算
+    files: ['data_cn/schedule.js', 'data_cn/status.js'],
+    dataVar: 'CN_SCHEDULE',
+    statusVar: 'CN_STATUS',
+    // 灯箱下面的「选影院」铜牌：上面一行品牌，下面大字是商场（地方），点一下切换
+    venues: function (all) {
+      return cinemasOf(all).map(function (c) {
+        return { id: String(c.id), brand: c.brand || '', name: c.place || c.branch || c.name || '影院 ' + c.id,
+                 tip: (c.name || '') + (c.addr ? ' · ' + c.addr : '') };
+      });
+    },
+    // 挑出一家，拼成和以前一样的格式（只带这家在放的电影）；这家这次没抓到时带上它自己的状态，网页顶上会提示
+    pick: function (all, id) {
+      if (!all || !Array.isArray(all.cinemas)) return all || null;
+      var list = cinemasOf(all), c = list.filter(function (x) { return String(x.id) === String(id); })[0] || list[0];
+      if (!c) return null;
+      var used = {}, movies = {}, src = all.movies || {};
+      (c.days || []).forEach(function (d) { ((d && d.sessions) || []).forEach(function (s) { used[s.movieId] = 1; }); });
+      Object.keys(src).forEach(function (mid) { if (used[mid]) movies[mid] = src[mid]; });
+      return { generatedAt: c.generatedAt || null, cinema: c, days: c.days || [], movies: movies,
+               status: c.ok === false ? { ok: false, lastAttempt: c.lastAttempt, message: c.message } : null };
+    },
+    kicker: function (r) { var c = cinema(r); return c.brand ? c.brand + (c.branch ? ' · ' + c.branch : '') : ''; },
+    placeEn: function (r) { return cinema(r).cityEn || 'CHINA'; },
+    placeZh: function (r) { return cinema(r).city || '北京时间'; },
+    docTitle: function (r) { return (cinema(r).label || '国内影院') + ' 排片'; },
+    counter: { key: 'cncin-visits', base: 0, tip: '打开这个国内影院页面的次数' },
+    defaultSort: 'count',                  // 国内一部片一天十几场，按场次多少排最能看出热门
+    adsMin: 8,                             // 国内场次时间到正片开始一般有几分钟映前广告
+    sourceName: '猫眼',
+    bookName: '猫眼',
+    advanceLabel: '点映',
+    refreshCmd: '立即刷新排片（国内影院）.cmd',
+    staleHint: '（排片由云端每 3 小时自动更新，这台电脑每小时同步一次；关机、睡眠或断网时同步不了）',
+    staleHintWeb: '（排片由云端每 3 小时自动更新一次）',
+    repo: 'https://github.com/rwan407-ctrl/cinema-tomorrow',
+    webUrl: 'https://rwan407-ctrl.github.io/cinema/china.html',     // 手机网页版（GitHub Pages）
+    qr: 'assets/qr-cn.svg',
+    manifest: 'manifest_cn.webmanifest',
+    movie: function (m) { return m; },     // update_cn.py 已经写成统一格式
+    session: function (s) { return s; },
+    footer: function (r, h) {
+      var c = cinema(r), st = h.status;
+      return (r ? '排片数据更新于 <b>' + esc(h.fmtStamp(r.generatedAt)) + '</b>（' + esc(h.ago(r.generatedAt)) + '，按本机时间）' : '还没有排片数据') +
+        (h.web ? ' · 云端每 3 小时自动更新<br>' : ' · 云端（GitHub Actions）每 3 小时自动更新，这台电脑每小时同步一次<br>') +
+        '场次、简介、猫眼评分、预告片：猫眼电影 · 豆瓣评分：豆瓣 · 页面上的日期和场次时间都是北京时间<br>' +
+        (c.name ? esc(c.name) + (c.addr ? ' · ' + esc(c.addr) : '') + '<br>' : '') +
+        '个人整理的非官方页面，购票、场次以 <a href="' + esc(c.url || 'https://www.maoyan.com/') + '" target="_blank" rel="noopener noreferrer">猫眼</a> 和影院为准' +
+        (h.web ? '<br>' : ' · 想再加一家影院：在 <code>' + esc(h.dir) + '</code> 里运行 <code>python update_cn.py --find 关键词 --city 城市</code> 找编号，' +
+          '再 <code>python update_cn.py --add 编号 --city 城市</code><br>' +
+          '手动刷新：双击 <code>' + esc(h.dir) + '\\立即刷新排片（国内影院）.cmd</code> · ') +
+        '代码与自动更新：<a href="https://github.com/rwan407-ctrl/cinema-tomorrow" target="_blank" rel="noopener noreferrer">GitHub 私有仓库</a>' +
+        (st && st.message ? ' · 上次运行：' + esc(st.message) : '');
+    }
+  });
+})();
+</script>
+</body>
+</html>
