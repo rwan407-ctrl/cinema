@@ -1,0 +1,16 @@
+{
+  "id": "china.html",
+  "name": "明日放映 · 上海影院排片（五角场万达 · 博纳中原）",
+  "short_name": "上海影院",
+  "description": "上海影院明天放映的电影（五角场万达影城、中原城市广场博纳影城，点一下切换）：剧情简介、豆瓣和猫眼评分、场次时间、预告片。",
+  "lang": "zh-CN",
+  "start_url": "china.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0706",
+  "theme_color": "#0b0706",
+  "icons": [
+    { "src": "assets/icon-cn-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-cn-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
