@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 网页版：图片都放在影院 / 猫眼的服务器上，不带来源网址才不会被防盗链挡住；也不让搜索引擎收录 -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0706">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="明日放映">
+<title>明日放映 · Event Queen Street 中文排片</title>
+<meta name="description" content="Event Cinemas Queen Street（奥克兰皇后街）明天放映的电影：中文片名、剧情简介、豆瓣评分、场次时间。">
+<link rel="icon" href="icon.ico">
+<link rel="apple-touch-icon" href="assets/touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Limelight&family=Noto+Serif+SC:wght@500;700;900&family=Oswald:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/cinema.css">
+</head>
+<body>
+<header class="stage">
+  <div class="valance" aria-hidden="true"></div>
+  <div class="curtain l" aria-hidden="true"></div>
+  <div class="curtain r" aria-hidden="true"></div>
+  <div class="marquee">
+    <div class="bulbs" aria-hidden="true"></div>
+    <p class="kicker" id="kicker">EVENT CINEMAS · QUEEN STREET</p>
+    <h1 class="headline" id="headline">明日放映</h1>
+    <p class="dateline" id="dateline">&nbsp;</p>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="extras">
+    <a class="switch" id="switch" href="china.html" title="看国内影院的排片（同样的样式）">
+      <span class="s1">CHANGE CINEMA · 换影院</span><span class="s2" id="switchName">上海 · 五角场万达 ›</span>
+    </a>
+    <div class="admit" id="admit">
+      <div class="a1">ADMIT ONE</div>
+      <div class="a2" id="admitNo">No. 000539</div>
+      <div class="a3" id="admitTxt">第 539 次查看排片</div>
+    </div>
+  </div>
+</header>
+
+<nav class="days" id="days" aria-label="选择日期"></nav>
+<div class="wrap"><div class="banner" id="banner" role="status" hidden></div></div>
+<div class="film" aria-hidden="true"></div>
+
+<div class="wrap">
+  <div class="toolbar">
+    <div class="seg" id="views" role="group" aria-label="显示方式"></div>
+    <div class="chips" id="periods" role="group" aria-label="时段"></div>
+    <label class="sorter" id="sorter">排序 <select id="sort"></select></label>
+  </div>
+  <div class="cats" id="cats" aria-label="按地区、类型分类"></div>
+  <main id="show" class="grid"></main>
+</div>
+
+<footer id="footer"></footer>
+<dialog class="detail" id="detail" aria-label="影片详情"></dialog>
+<noscript><p class="empty">这个页面需要开启 JavaScript 才能显示排片。</p></noscript>
+
+<script src="data_cn/cinema.js" onerror="this.remove()"></script>
+<script src="assets/cinema.js"></script>
+<script>
+(function () {
+  'use strict';
+  var esc = CinemaApp.esc;
+
+  // 换影院按钮：显示国内页面上次看的是哪家影院（国内页面可以在几家之间切换，记在 cncin-venue）
+  (function () {
+    var cn = window.CN_CINEMA, last = null;
+    if (!cn || !cn.label) return;
+    try { last = localStorage.getItem('cncin-venue'); } catch (e) { last = null; }
+    var hit = (cn.cinemas || []).filter(function (c) { return c && String(c.id) === last; })[0];
+    document.getElementById('switchName').textContent = ((hit && hit.label) || cn.label) + ' ›';
+  })();
+
+  // 新西兰分级
+  var CLS = {
+    G: ['g', '普通级：所有年龄都可以看'], PG: ['y', '家长指导级：建议家长陪同观看'],
+    M: ['y', '成熟级：适合 16 岁以上观众（非强制）'], R13: ['r', '限制级：仅限 13 岁及以上'],
+    R15: ['r', '限制级：仅限 15 岁及以上'], R16: ['r', '限制级：仅限 16 岁及以上'],
+    R18: ['r', '限制级：仅限 18 岁及以上'], RP13: ['r', '13 岁以下须家长陪同'],
+    RP16: ['r', '16 岁以下须家长陪同'], RP18: ['r', '18 岁以下须家长陪同'],
+    TBC: ['n', '尚未定级'], CTC: ['n', '尚未定级（以影院公布为准）'], E: ['n', '豁免分级']
+  };
+  // Event 场次标记 → 中文；ATTR_HIDE 里的是内部标记或已经用别的方式显示了
+  var ATTR_ZH = {
+    'ADVANCE': '提前场', 'SPECEVENT': '特别场', 'CB SCR': '会员专场', 'SENR': '长者场', 'Half-Price': '半价',
+    'SAVER': '优惠场', 'Bring Your Baby': '带娃场', 'ENG SUBS': '英文字幕', 'Open Caption': '开放字幕',
+    'C CAP': '闭路字幕', 'AUD-DES': '口述影像', 'Japanese': '日语', 'Mandarin': '国语', 'Cantonese': '粤语',
+    'Korean': '韩语', 'Hindi': '印地语', 'Telugu': '泰卢固语', 'Tamil': '泰米尔语', 'Malayalam': '马拉雅拉姆语',
+    'Punjabi': '旁遮普语', 'Nepali': '尼泊尔语', 'Recliner': '躺椅', 'DAYBED': '躺床', '4K': '4K', '3D': '3D',
+    'Morning Tea': '含早茶', 'Alt Cont': '演出转播'
+  };
+  var ATTR_HIDE = { 'IR': 1, 'NC': 1, 'LOOP': 1, 'CIN ASIA': 1, 'CineIndia': 1, 'Filmed For IMAX': 1, 'IMAX': 1,
+    'GC': 1, 'Std': 1, 'Laser': 1, 'NO LOUNGE ACCESS': 1 };
+  // 豆瓣没有国家信息时，用 Event 的场次标记猜地区
+  var ATTR_REGION = { 'CineIndia': 'in', 'Hindi': 'in', 'Telugu': 'in', 'Tamil': 'in', 'Malayalam': 'in', 'Punjabi': 'in',
+    'Nepali': 'in', 'Mandarin': 'cn', 'Cantonese': 'cn', 'Japanese': 'jp', 'Korean': 'kr' };
+  var INTRO_SRC = { douban: '简介来自豆瓣', manual: '人工翻译自 Event 官网简介', machine: '机器翻译自 Event 官网英文简介（豆瓣暂无此片）' };
+
+  // 重映 = 以前上映过的老片（网页上放最右边、变淡）。返回原因，空 = 不是。
+  // 先看 data/overrides.json 的 "rerun": true / false；再看英文片名写没写 Re-release / Remastered / 周年纪念；
+  // 再看豆瓣年份是不是比这次上映早两年以上；最后看 Event 记的上映日期是不是一年多以前（演唱会、歌剧这类特别活动不算）
+  var RERUN_NAME = /\bre-?releas(e|ed)\b|\bremaster(ed)?\b|\banniversary\b|\brestor(ed|ation)\b/i;
+  function rerunWhy(m, z, special, raw) {
+    if (z.rerun === true || z.rerun === false) return z.rerun ? '人工标的重映' : '';
+    if (RERUN_NAME.test(m.name || '')) return '片名写着重映 / 修复 / 周年纪念（' + m.name + '）';
+    var rel = /^\d{4}-\d{2}-\d{2}$/.test(m.releasedAt || '') ? m.releasedAt : '', y = parseInt(z.year, 10);
+    if (y && rel && y < +rel.slice(0, 4) - 1) return y + ' 年的片，以前上映过';
+    var gen = String((raw && raw.generatedAt) || '').slice(0, 10);
+    if (rel && !special && /^\d{4}-\d{2}-\d{2}$/.test(gen) && rel < (+gen.slice(0, 4) - 1) + gen.slice(4)) {
+      return rel.slice(0, 4) + ' 年 ' + (+rel.slice(5, 7)) + ' 月就在新西兰上映过';
+    }
+    return '';
+  }
+
+  CinemaApp.start({
+    key: 'ecqs',
+    tz: 'Pacific/Auckland',
+    files: ['data/schedule.js', 'data/status.js'],
+    dataVar: 'EVENT_SCHEDULE',
+    statusVar: 'EVENT_STATUS',
+    placeEn: 'AUCKLAND',
+    placeZh: '奥克兰',
+    docTitle: 'Event Queen Street 中文排片',
+    counter: { key: 'ecqs-visits', base: 538, tip: '你说来新西兰后已经查了 538 次排片，这里接着数' },
+    defaultSort: 'time',
+    adsMin: 15,                       // Event 场次时间含约 15 分钟广告和预告片
+    sourceName: 'Event 官网',
+    bookName: ' Event 官网',
+    advanceLabel: '提前场',
+    refreshCmd: '立即刷新排片.cmd',
+    staleHint: '（排片由云端每 3 小时自动更新，这台电脑每小时同步一次；关机、睡眠或断网时同步不了）',
+    staleHintWeb: '（排片由云端每 3 小时自动更新一次）',
+    repo: 'https://github.com/rwan407-ctrl/cinema-tomorrow',
+    webUrl: 'https://rwan407-ctrl.github.io/cinema/',     // 手机网页版（GitHub Pages）
+    qr: 'assets/qr.svg',
+    manifest: 'manifest.webmanifest',
+
+    movie: function (m, raw) {
+      var z = m.zh || {};
+      var title = z.title || m.name || '未知影片';
+      var special = (m.movieAttrs || []).indexOf('Alt Cont') >= 0, why = rerunWhy(m, z, special, raw);
+      var cls = m.rating ? (CLS[m.rating] || ['n', m.rating]) : null;
+      var same = function (a, b) { return (a || '').toLowerCase() === (b || '').toLowerCase(); };
+      var sub = m.name && !same(m.name, title) ? m.name : '';
+      if (z.originalTitle && !same(z.originalTitle, m.name) && !same(z.originalTitle, title)) sub += (sub ? ' · ' : '') + z.originalTitle;
+      var scores = [];
+      if (z.doubanId) scores.push(z.rating ? { name: '豆瓣', value: z.rating, count: z.ratingCount || 0 } : { name: '豆瓣', text: '暂无评分' });
+      var links = [];
+      if (m.trailer) links.push({ text: '▶ 预告片（YouTube）', url: 'https://www.youtube.com/watch?v=' + encodeURIComponent(m.trailer) });
+      if (z.doubanId) links.push({ text: '豆瓣页面', url: 'https://movie.douban.com/subject/' + encodeURIComponent(z.doubanId) + '/' });
+      if (m.url) links.push({ text: 'Event 官网', url: m.url });
+      return {
+        id: m.id,
+        title: title,
+        titleTag: z.titleSource === 'machine' ? { text: '机翻', tip: '豆瓣上没找到，片名是机器翻译' } : (z.titleNote ? { text: z.titleNote } : null),
+        sub: sub,
+        poster: m.poster,
+        cert: cls ? { text: m.rating, cls: cls[0], tip: cls[1] } : null,
+        runtime: m.runtime,
+        genres: z.genres || [],
+        countries: z.countries || [],
+        languages: z.languages || [],
+        region: z.region || '',
+        regionHint: (m.movieAttrs || []).map(function (a) { return ATTR_REGION[a]; }).filter(Boolean)[0] || '',
+        place: [(z.countries || []).slice(0, 2).join('、'), (z.languages || []).slice(0, 2).join('、')].filter(Boolean).join(' · '),
+        scores: scores,
+        sortScore: z.rating || -1,
+        directors: (z.directors && z.directors.length) ? z.directors.join(' / ') : (m.director || ''),
+        actors: (z.actors && z.actors.length) ? z.actors.slice(0, 5).join(' / ')
+          : (m.cast || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 5).join(' / '),
+        note: z.note || '',
+        intro: z.intro || m.synopsis || '',
+        introSrc: INTRO_SRC[z.introSource] || (z.intro ? '' : 'Event 官网英文简介'),
+        introMachine: z.introSource === 'machine',
+        introEn: z.intro && m.synopsis ? m.synopsis : '',
+        policy: z.policy || (/^[\s\-–]*$|^(TBC|CTC)$/i.test(m.policy || '') ? '' : m.policy),
+        year: z.year || '',
+        release: m.releasedAt || '',
+        rerun: !!why,
+        rerunWhy: why,
+        chinese: (z.languages || []).some(function (l) { return /汉语|普通话|粤语|闽南/.test(l); }),
+        special: special,
+        links: links,
+        idText: 'Event #' + m.id
+      };
+    },
+
+    session: function (s, raw) {
+      var info = raw.attributes || {}, codes = s.attrs || [], tags = [];
+      codes.forEach(function (c) {
+        if (ATTR_HIDE[c]) return;
+        var z = ATTR_ZH[c] || (info[c] && info[c].name) || c;
+        if (tags.indexOf(z) < 0) tags.push(z);
+      });
+      return {
+        id: s.id,
+        movieId: s.movieId,
+        start: s.start,
+        hall: s.screen ? s.screen + '号厅' : (s.type === 'IMAX' ? 'IMAX 厅' : s.type === 'GC' ? 'Gold Class' : ''),
+        fmt: s.type === 'IMAX' ? { text: 'IMAX', cls: 'imax', rank: 0 }
+          : s.type === 'GC' ? { text: 'GOLD CLASS', short: 'GC', label: 'Gold Class', cls: 'gc', rank: 1 } : null,
+        tags: tags,
+        seats: s.seats,
+        booking: s.booking,
+        advance: codes.indexOf('ADVANCE') >= 0,
+        is3d: codes.indexOf('3D') >= 0
+      };
+    },
+
+    footer: function (r, h) {
+      var st = h.status;
+      return (r ? '排片数据更新于 <b>' + esc(h.fmtStamp(r.generatedAt)) + '</b>（' + esc(h.ago(r.generatedAt)) + '）' : '还没有排片数据') +
+        (h.web ? ' · 云端每 3 小时自动更新<br>' : ' · 云端（GitHub Actions）每 3 小时自动更新，这台电脑每小时同步一次<br>') +
+        '场次与余座：Event Cinemas 官网（余座是更新那一刻的数字）· 中文片名、简介、评分：豆瓣；标「机翻」的是谷歌翻译，标「暂译」的是人工暂译<br>' +
+        '个人整理的非官方页面，购票、场次以 <a href="' + esc(r ? r.cinema.url : 'https://www.eventcinemas.co.nz/Cinema/Queen-Street') +
+        '" target="_blank" rel="noopener noreferrer">Event 官网</a> 为准 · 291-297 Queen Street, Auckland CBD<br>' +
+        (h.web ? '' : '手动刷新：双击 <code>' + esc(h.dir) + '\\立即刷新排片.cmd</code> · ') +
+        '代码与自动更新：<a href="https://github.com/rwan407-ctrl/cinema-tomorrow" target="_blank" rel="noopener noreferrer">GitHub 私有仓库</a>' +
+        (st && st.message ? ' · 上次运行：' + esc(st.message) : '');
+    }
+  });
+})();
+</script>
+</body>
+</html>
